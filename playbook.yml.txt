@@ -1,0 +1,70 @@
+---
+- hosts: all
+  become: yes
+  tasks:
+    - name: NFS Server
+      block:
+        - name: Install NFS server packages
+          ansible.builtin.package:
+            name: nfs-kernel-server
+            state: present
+
+        - name: Create NFS shared directory
+          ansible.builtin.file:
+            path: "/nfs"
+            state: directory
+            owner: "root"
+            group: "root"
+            mode: "0755"
+
+        - name: Configure exports file
+          ansible.builtin.copy:
+            dest: "/etc/exports"
+            content: |
+              /nfs *(rw,sync,no_subtree_check)
+            owner: "root"
+            group: "root"
+            mode: "0644"
+          notify: Restart NFS server
+
+        - name: Ensure NFS server is running and enabled
+          ansible.builtin.service:
+            name: nfs-kernel-server
+            state: started
+            enabled: true
+          when: ansible_host == "192.168.1.2"
+
+  handlers:
+    - name: Restart NFS server
+      ansible.builtin.service:
+        name: nfs-kernel-server
+        state: restarted
+
+- hosts: all
+  become: yes
+  tasks:
+    - name: NFS Client
+      block:
+        - name: Install NFS client packages
+          ansible.builtin.package:
+            name: nfs-common
+            state: present
+
+        - name: Create mount directory for NFS
+          ansible.builtin.file:
+            path: "/mnt/nfs"
+            state: directory
+            owner: "root"
+            group: "root"
+            mode: "0755"
+
+        - name: Mount NFS share
+          ansible.builtin.mount:
+            path: "/mnt/nfs"
+            src: "192.168.1.2:/nfs"
+            fstype: "nfs"
+            opts: "defaults"
+            state: "mounted"
+            fstab: yes
+           when: inventory_hostname in ['machine1', 'machine2']
+#          when: ansible_host == "192.168.1.3"
